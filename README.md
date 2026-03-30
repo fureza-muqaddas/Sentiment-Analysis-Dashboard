@@ -8,7 +8,7 @@
 
 > Real-time media sentiment analysis for any company — scrapes news articles and Reddit posts, scores each one with NLP, and visualizes sentiment trends over time.
 
-**[Live Demo →](https://finsentinel.onrender.com)**
+**[Live Demo →](https://sentiment-analysis-dashboard-usxx.onrender.com/)**
 
 ![FinSentinel Demo](demo.gif)
 
