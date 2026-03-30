@@ -77,10 +77,19 @@ def fetch_news(company: str, days: int = 7) -> list[dict]:
     import xml.etree.ElementTree as ET
     from email.utils import parsedate_to_datetime
 
+    q = requests.utils.quote(company)
     feeds = [
-        f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={requests.utils.quote(company)}&region=US&lang=en-US",
-        f"https://news.google.com/rss/search?q={requests.utils.quote(company)}+stock&hl=en-US&gl=US&ceid=US:en",
-        f"https://news.google.com/rss/search?q={requests.utils.quote(company)}+finance&hl=en-US&gl=US&ceid=US:en",
+        # Google News — broad + specific angles
+        f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en",
+        f"https://news.google.com/rss/search?q={q}+stock&hl=en-US&gl=US&ceid=US:en",
+        f"https://news.google.com/rss/search?q={q}+earnings&hl=en-US&gl=US&ceid=US:en",
+        f"https://news.google.com/rss/search?q={q}+market&hl=en-US&gl=US&ceid=US:en",
+        f"https://news.google.com/rss/search?q={q}+CEO&hl=en-US&gl=US&ceid=US:en",
+        # Yahoo Finance
+        f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={q}&region=US&lang=en-US",
+        # Canadian outlets
+        f"https://news.google.com/rss/search?q={q}&hl=en-CA&gl=CA&ceid=CA:en",
+        f"https://news.google.com/rss/search?q={q}+Alberta&hl=en-CA&gl=CA&ceid=CA:en",
     ]
 
     cutoff = datetime.utcnow() - timedelta(days=days)
