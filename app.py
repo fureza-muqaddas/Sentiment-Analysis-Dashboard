@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import requests
 import os
 from datetime import datetime, timedelta
+from typing import Tuple
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -40,7 +41,7 @@ REDDIT_SEARCH_URL = "https://www.reddit.com/search.json"
 
 
 # ─── Sentiment Helpers ────────────────────────────────────────────────────────
-def get_sentiment(text: str) -> tuple[float, str]:
+def get_sentiment(text: str) -> Tuple[float, str]:
     """Returns (score [-1,1], label ['positive'|'negative'|'neutral'])"""
     if not text or ANALYZER == "none":
         return 0.0, "neutral"
@@ -108,6 +109,12 @@ def fetch_news(company: str, days: int = 7) -> list[dict]:
         return []
 
 
+FINANCIAL_SUBREDDITS = (
+    "investing+stocks+finance+wallstreetbets+stockmarket+"
+    "SecurityAnalysis+CanadianInvestor+PersonalFinanceCanada+"
+    "algotrading+business+economics+dividends+ValueInvesting+ETFs"
+)
+
 def fetch_reddit(company: str, days: int = 7) -> list[dict]:
     time_map = {1: "day", 3: "week", 7: "week", 14: "month", 30: "month"}
     t = time_map.get(days, "month")
@@ -117,11 +124,13 @@ def fetch_reddit(company: str, days: int = 7) -> list[dict]:
         "t": t,
         "limit": 100,
         "type": "link",
+        "restrict_sr": "true",
     }
     headers = {"User-Agent": "FinSentinel/1.0 (sentiment research tool)"}
+    subreddit_url = f"https://www.reddit.com/r/{FINANCIAL_SUBREDDITS}/search.json"
     try:
         resp = requests.get(
-            REDDIT_SEARCH_URL, params=params, headers=headers, timeout=10
+            subreddit_url, params=params, headers=headers, timeout=10
         )
         resp.raise_for_status()
         children = resp.json().get("data", {}).get("children", [])
