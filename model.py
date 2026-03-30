@@ -1,17 +1,28 @@
+import requests
 from transformers import pipeline
 
-print("Loading FinBERT model... (first time is slow)")
-sentiment = pipeline("text-classification", model="ProsusAI/finbert")
+def get_news(company, api_key):
+    url = f"https://newsapi.org/v2/everything?q={company}&language=en&sortBy=relevancy&pageSize=10&apiKey={api_key}"
+    res = requests.get(url)
+    articles = res.json().get("articles", [])
+    return [a["title"] for a in articles if a["title"] != "[Removed]"]
 
-headlines = [
-    "NVIDIA beats earnings expectations by 40%",
-    "FTC opens antitrust probe into NVIDIA",
-    "Chip stocks mixed ahead of Fed decision"
-]
+NEWS_API_KEY = "c5969b637b1744689be50c6893c36abc"
+COMPANY = "NVIDIA"
+
+print(f"Fetching news for {COMPANY}...")
+headlines = get_news(COMPANY, NEWS_API_KEY)
+print(f"Found {len(headlines)} articles\n")
+
+print("Loading FinBERT model...")
+sentiment = pipeline("text-classification", model="ProsusAI/finbert")
 
 results = sentiment(headlines)
 
+print(f"\n── SENTIMENT RESULTS FOR {COMPANY} ──\n")
 for headline, result in zip(headlines, results):
     label = result['label'].upper()
     score = round(result['score'], 3)
-    print(f"{label} ({score}) — {headline}")
+    emoji = "🟢" if label == "POSITIVE" else "🔴" if label == "NEGATIVE" else "⚪"
+    print(f"{emoji} {label} ({score})")
+    print(f"   {headline}\n")
