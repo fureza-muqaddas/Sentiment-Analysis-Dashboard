@@ -1,0 +1,9 @@
+flask==3.0.3
+requests==2.32.3
+python-dotenv==1.0.1
+vaderSentiment==3.3.2
+gunicorn==22.0.0
+
+# Optional — uncomment for FinBERT (requires ~2GB RAM on Render)
+# transformers==4.41.2
+# torch==2.3.1
