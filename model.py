@@ -7,7 +7,7 @@ def get_news(company, api_key):
     articles = res.json().get("articles", [])
     return [a["title"] for a in articles if a["title"] != "[Removed]"]
 
-NEWS_API_KEY = "c5969b637b1744689be50c6893c36abc"
+NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
 COMPANY = "NVIDIA"
 
 print(f"Fetching news for {COMPANY}...")
