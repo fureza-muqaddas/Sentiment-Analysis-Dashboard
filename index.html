@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinSentinel — Media Sentiment Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <style>
+    :root {
+      --bg:       #080a0f;
+      --surface:  #0e1117;
+      --card:     #111520;
+      --border:   #1a2035;
+      --border2:  #252d45;
+      --amber:    #f59e0b;
+      --amber-dim:#b37200;
+      --green:    #10b981;
+      --red:      #ef4444;
+      --neutral:  #6b7280;
+      --text:     #dce3f0;
+      --text2:    #8896b3;
+      --text3:    #4a5568;
+      --mono:     'IBM Plex Mono', monospace;
+      --serif:    'DM Serif Display', serif;
+      --sans:     'DM Sans', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Scanline overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.04) 2px,
+        rgba(0,0,0,0.04) 4px
+      );
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      background: rgba(8,10,15,0.95);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      border: 1.5px solid var(--amber);
+      display: grid;
+      place-items: center;
+    }
+
+    .logo-icon svg { width: 18px; height: 18px; }
+
+    .logo-text {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.08em;
+    }
+
+    .logo-text span { color: var(--amber); }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .analyzer-badge {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      padding: 3px 8px;
+      border: 1px solid var(--amber-dim);
+      color: var(--amber);
+      background: rgba(245,158,11,0.08);
+    }
+
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* ── Search Section ── */
+    .search-section {
+      margin-bottom: 2.5rem;
+    }
+
+    .search-headline {
+      font-family: var(--serif);
+      font-size: 2.8rem;
+      color: var(--text);
+      line-height: 1.1;
+      margin-bottom: 0.4rem;
+    }
+
+    .search-headline em {
+      font-style: italic;
+      color: var(--amber);
+    }
+
+    .search-sub {
+      color: var(--text2);
+      font-size: 13px;
+      margin-bottom: 1.5rem;
+      font-family: var(--mono);
+    }
+
+    .search-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .search-input-wrap {
+      flex: 1;
+      min-width: 220px;
+      position: relative;
+    }
+
+    .search-input-wrap input {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      padding: 12px 16px 12px 44px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-input-wrap input::placeholder { color: var(--text3); }
+    .search-input-wrap input:focus { border-color: var(--amber); }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text3);
+    }
+
+    select, .btn {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 12px 16px;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    select:focus { border-color: var(--amber); }
+    select option { background: var(--card); }
+
+    .btn-analyze {
+      background: var(--amber);
+      border-color: var(--amber);
+      color: #000;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      padding: 12px 28px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-analyze:hover { background: #fbbf24; }
+    .btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Source toggles */
+    .source-toggles {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .toggle-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      padding: 5px 12px;
+      border: 1px solid var(--border2);
+      cursor: pointer;
+      color: var(--text2);
+      background: transparent;
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    .toggle-pill.active {
+      border-color: var(--amber);
+      color: var(--amber);
+      background: rgba(245,158,11,0.08);
+    }
+
+    .toggle-pill input { display: none; }
+
+    /* ── Stats Row ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+      background: var(--card);
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      color: var(--text3);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .stat-value.positive { color: var(--green); }
+    .stat-value.negative { color: var(--red); }
+    .stat-value.neutral  { color: var(--neutral); }
+    .stat-value.amber    { color: var(--amber); }
+
+    .stat-sub {
+      font-size: 11px;
+      color: var(--text3);
+      margin-top: 2px;
+      font-family: var(--mono);
+    }
+
+    /* ── Charts Grid ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .chart-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 24px;
+    }
+
+    .chart-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-title::before {
+      content: '';
+      display: block;
+      width: 3px;
+      height: 12px;
+      background: var(--amber);
+    }
+
+    .chart-wrap { position: relative; }
+
+    /* ── Articles Feed ── */
+    .feed-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .feed-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text3);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feed-title::before {
+      content: '';
+      display: block;
+      width: 3px;
+      height: 12px;
+      background: var(--amber);
+    }
+
+    .feed-filter {
+      display: flex;
+      gap: 6px;
+    }
+
+    .filter-btn {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      padding: 4px 10px;
+      border: 1px solid var(--border2);
+      background: transparent;
+      color: var(--text3);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .filter-btn.active { border-color: var(--amber); color: var(--amber); }
+    .filter-btn:hover { border-color: var(--border2); color: var(--text2); }
+    .filter-btn.active:hover { border-color: var(--amber); color: var(--amber); }
+
+    .articles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .article-card {
+      background: var(--card);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: background 0.15s;
+    }
+
+    .article-card:hover { background: #151a26; }
+
+    .article-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .article-source {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+      letter-spacing: 0.08em;
+    }
+
+    .article-source.reddit { color: #ff6314; }
+    .article-source.news { color: #60a5fa; }
+
+    .sentiment-pill {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      padding: 2px 8px;
+      text-transform: uppercase;
+    }
+
+    .sentiment-pill.positive {
+      background: rgba(16,185,129,0.12);
+      color: var(--green);
+      border: 1px solid rgba(16,185,129,0.3);
+    }
+
+    .sentiment-pill.negative {
+      background: rgba(239,68,68,0.12);
+      color: var(--red);
+      border: 1px solid rgba(239,68,68,0.3);
+    }
+
+    .sentiment-pill.neutral {
+      background: rgba(107,114,128,0.12);
+      color: var(--neutral);
+      border: 1px solid rgba(107,114,128,0.3);
+    }
+
+    .article-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .article-title a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .article-title a:hover { color: var(--amber); }
+
+    .article-desc {
+      font-size: 12px;
+      color: var(--text2);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .article-score-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .score-track {
+      flex: 1;
+      height: 2px;
+      background: var(--border2);
+      position: relative;
+      overflow: visible;
+    }
+
+    .score-fill {
+      position: absolute;
+      top: 0;
+      height: 100%;
+    }
+
+    .score-fill.positive { background: var(--green); right: 50%; }
+    .score-fill.negative { background: var(--red); left: 50%; }
+    .score-fill.neutral  { background: var(--neutral); left: 50%; width: 1px; }
+
+    .score-center {
+      position: absolute;
+      left: 50%;
+      top: -2px;
+      width: 1px;
+      height: 6px;
+      background: var(--border2);
+    }
+
+    .score-num {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+      min-width: 48px;
+      text-align: right;
+    }
+
+    .article-date {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+    }
+
+    /* ── Loading / Error States ── */
+    .state-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 60px 40px;
+      text-align: center;
+      color: var(--text2);
+    }
+
+    .state-icon {
+      font-size: 32px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .state-title {
+      font-family: var(--mono);
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .state-sub {
+      font-size: 12px;
+      color: var(--text3);
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(245,158,11,0.2);
+      border-top-color: var(--amber);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Trend meter ── */
+    .overall-meter {
+      height: 4px;
+      background: var(--border2);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .overall-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .charts-grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (max-width: 600px) {
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .search-headline { font-size: 2rem; }
+      main { padding: 1rem; }
+    }
+
+    /* ── Fade-in animation ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .fade-up { animation: fadeUp 0.4s ease forwards; }
+    .fade-up-2 { animation: fadeUp 0.4s ease 0.1s forwards; opacity: 0; }
+    .fade-up-3 { animation: fadeUp 0.4s ease 0.2s forwards; opacity: 0; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 18 18" fill="none" stroke="#f59e0b" stroke-width="1.5">
+        <polyline points="1,14 5,8 9,10 13,4 17,2"/>
+        <line x1="1" y1="16" x2="17" y2="16"/>
+      </svg>
+    </div>
+    <span class="logo-text">FIN<span>SENTINEL</span></span>
+  </div>
+  <div class="header-right">
+    <span class="analyzer-badge" id="analyzerBadge">{{ analyzer }}</span>
+    <div class="live-dot"></div>
+  </div>
+</header>
+
+<!-- ── Main ── -->
+<main>
+
+  <!-- Search Section -->
+  <section class="search-section fade-up">
+    <h1 class="search-headline">Media <em>Sentiment</em><br/>Intelligence</h1>
+    <p class="search-sub">// real-time news &amp; social sentiment analysis</p>
+
+    <div class="search-row">
+      <div class="search-input-wrap">
+        <span class="search-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="7" cy="7" r="5"/>
+            <line x1="11" y1="11" x2="15" y2="15"/>
+          </svg>
+        </span>
+        <input
+          type="text"
+          id="companyInput"
+          placeholder="e.g. Apple, Tesla, AIMCo, Shopify..."
+          autocomplete="off"
+        />
+      </div>
+
+      <select id="daysSelect">
+        <option value="1">1 day</option>
+        <option value="3">3 days</option>
+        <option value="7" selected>7 days</option>
+        <option value="14">14 days</option>
+        <option value="30">30 days</option>
+      </select>
+
+      <button class="btn btn-analyze" id="analyzeBtn" onclick="runAnalysis()">
+        <span id="btnText">ANALYZE</span>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="2" y1="7" x2="12" y2="7"/>
+          <polyline points="8,3 12,7 8,11"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Source toggles -->
+    <div class="source-toggles">
+      <label class="toggle-pill active" id="toggleNews">
+        <input type="checkbox" checked onchange="toggleSource('news')"/>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="1" y="2" width="10" height="8" rx="1"/>
+          <line x1="3" y1="5" x2="9" y2="5"/>
+          <line x1="3" y1="7" x2="7" y2="7"/>
+        </svg>
+        NEWS
+      </label>
+      <label class="toggle-pill active" id="toggleReddit">
+        <input type="checkbox" checked onchange="toggleSource('reddit')"/>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="6" cy="6" r="5"/>
+          <circle cx="6" cy="5" r="1.5"/>
+          <path d="M3 8c0-1.5 1.3-2.5 3-2.5s3 1 3 2.5"/>
+        </svg>
+        REDDIT
+      </label>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--text3);align-self:center;margin-left:4px;">
+        reddit = no API key required
+      </span>
+    </div>
+  </section>
+
+  <!-- Stats Row -->
+  <div class="stats-row fade-up-2" id="statsRow">
+    <div class="stat-card">
+      <div class="stat-label">Articles</div>
+      <div class="stat-value amber" id="statTotal">—</div>
+      <div class="stat-sub">analyzed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Overall Sentiment</div>
+      <div class="stat-value" id="statScore">—</div>
+      <div class="overall-meter">
+        <div class="overall-fill" id="overallFill" style="width:50%; background:var(--neutral)"></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Positive</div>
+      <div class="stat-value positive" id="statPos">—</div>
+      <div class="stat-sub" id="statPosPct"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Negative</div>
+      <div class="stat-value negative" id="statNeg">—</div>
+      <div class="stat-sub" id="statNegPct"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Neutral</div>
+      <div class="stat-value neutral" id="statNeut">—</div>
+      <div class="stat-sub" id="statNeutPct"></div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid fade-up-3" id="chartsGrid">
+    <div class="chart-card">
+      <div class="chart-title">Sentiment Trend Over Time</div>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Sentiment Distribution</div>
+      <div class="chart-wrap" style="height:220px;display:flex;align-items:center;justify-content:center;">
+        <canvas id="donutChart" style="max-width:200px;max-height:200px"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Articles Feed -->
+  <div id="feedSection">
+    <div class="feed-header">
+      <div class="feed-title">Article Feed</div>
+      <div class="feed-filter">
+        <button class="filter-btn active" onclick="filterArticles('all', this)">ALL</button>
+        <button class="filter-btn" onclick="filterArticles('positive', this)" style="color:var(--green)">POS</button>
+        <button class="filter-btn" onclick="filterArticles('negative', this)" style="color:var(--red)">NEG</button>
+        <button class="filter-btn" onclick="filterArticles('neutral', this)">NEU</button>
+      </div>
+    </div>
+    <div id="articlesContainer">
+      <div class="state-box">
+        <div class="state-icon">◈</div>
+        <div class="state-title">Enter a company name to begin analysis</div>
+        <div class="state-sub">Searches news articles and Reddit posts, then scores each one using {{ analyzer }} sentiment analysis.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let allArticles = [];
+  let trendChart = null;
+  let donutChart = null;
+  let activeSources = new Set(['news', 'reddit']);
+  let activeFilter = 'all';
+
+  // ── Source toggles ─────────────────────────────────────────────────────────
+  function toggleSource(src) {
+    const pill = document.getElementById('toggle' + src.charAt(0).toUpperCase() + src.slice(1));
+    if (activeSources.has(src)) {
+      activeSources.delete(src);
+      pill.classList.remove('active');
+    } else {
+      activeSources.add(src);
+      pill.classList.add('active');
+    }
+  }
+
+  // ── Run Analysis ───────────────────────────────────────────────────────────
+  async function runAnalysis() {
+    const company = document.getElementById('companyInput').value.trim();
+    const days = parseInt(document.getElementById('daysSelect').value);
+    if (!company) {
+      document.getElementById('companyInput').focus();
+      return;
+    }
+    if (activeSources.size === 0) {
+      showError('Select at least one source (News or Reddit).');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const resp = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company,
+          days,
+          sources: Array.from(activeSources)
+        })
+      });
+      const data = await resp.json();
+
+      if (data.error && (!data.articles || data.articles.length === 0)) {
+        showError(data.error);
+        return;
+      }
+
+      renderDashboard(data);
+    } catch (err) {
+      showError('Network error. Is the server running?');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Enter key support ──────────────────────────────────────────────────────
+  document.getElementById('companyInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') runAnalysis();
+  });
+
+  // ── Render Dashboard ───────────────────────────────────────────────────────
+  function renderDashboard(data) {
+    allArticles = data.articles || [];
+
+    // Stats
+    const total = data.total_articles || 0;
+    const score = data.overall_score || 0;
+    const lbl = data.overall_label || 'neutral';
+    const lc = data.label_counts || {};
+    const pos = lc.positive || 0;
+    const neg = lc.negative || 0;
+    const neu = lc.neutral || 0;
+
+    document.getElementById('statTotal').textContent = total;
+    const scoreEl = document.getElementById('statScore');
+    scoreEl.textContent = score.toFixed(3);
+    scoreEl.className = 'stat-value ' + lbl;
+
+    document.getElementById('statPos').textContent = pos;
+    document.getElementById('statNeg').textContent = neg;
+    document.getElementById('statNeut').textContent = neu;
+
+    if (total > 0) {
+      document.getElementById('statPosPct').textContent = pct(pos, total) + '%';
+      document.getElementById('statNegPct').textContent = pct(neg, total) + '%';
+      document.getElementById('statNeutPct').textContent = pct(neu, total) + '%';
+    }
+
+    // Overall meter (map -1..1 to 0..100%)
+    const fillPct = ((score + 1) / 2 * 100).toFixed(1);
+    const fill = document.getElementById('overallFill');
+    fill.style.width = fillPct + '%';
+    fill.style.background = lbl === 'positive' ? 'var(--green)' : lbl === 'negative' ? 'var(--red)' : 'var(--neutral)';
+
+    // Charts
+    renderTrendChart(data.trend || []);
+    renderDonutChart(pos, neg, neu);
+
+    // Articles
+    filterArticles(activeFilter, null);
+  }
+
+  function pct(n, total) {
+    return total > 0 ? Math.round(n / total * 100) : 0;
+  }
+
+  // ── Trend Chart ────────────────────────────────────────────────────────────
+  function renderTrendChart(trend) {
+    const labels = trend.map(t => t.date);
+    const scores = trend.map(t => t.avg_score);
+
+    if (trendChart) trendChart.destroy();
+
+    const ctx = document.getElementById('trendChart').getContext('2d');
+
+    const gradPos = ctx.createLinearGradient(0, 0, 0, 220);
+    gradPos.addColorStop(0, 'rgba(16,185,129,0.25)');
+    gradPos.addColorStop(1, 'rgba(16,185,129,0)');
+
+    const gradNeg = ctx.createLinearGradient(0, 0, 0, 220);
+    gradNeg.addColorStop(0, 'rgba(239,68,68,0)');
+    gradNeg.addColorStop(1, 'rgba(239,68,68,0.15)');
+
+    trendChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Avg Sentiment Score',
+          data: scores,
+          borderColor: scores.length > 0 && scores[scores.length-1] >= 0 ? '#10b981' : '#ef4444',
+          borderWidth: 2,
+          pointBackgroundColor: scores.map(s => s > 0.05 ? '#10b981' : s < -0.05 ? '#ef4444' : '#6b7280'),
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          fill: true,
+          backgroundColor: gradPos,
+          tension: 0.3,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#111520',
+            borderColor: '#1a2035',
+            borderWidth: 1,
+            titleFont: { family: "'IBM Plex Mono'" },
+            bodyFont:  { family: "'IBM Plex Mono'" },
+            callbacks: {
+              label: ctx => ` Score: ${ctx.parsed.y.toFixed(3)}`
+            }
+          },
+          annotation: {
+            annotations: {
+              zeroLine: {
+                type: 'line', yMin: 0, yMax: 0,
+                borderColor: 'rgba(255,255,255,0.1)',
+                borderWidth: 1,
+                borderDash: [4,4]
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: {
+              color: '#4a5568',
+              font: { family: "'IBM Plex Mono'", size: 10 },
+              maxTicksLimit: 8
+            }
+          },
+          y: {
+            min: -1, max: 1,
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: {
+              color: '#4a5568',
+              font: { family: "'IBM Plex Mono'", size: 10 },
+              callback: v => v.toFixed(2)
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // ── Donut Chart ────────────────────────────────────────────────────────────
+  function renderDonutChart(pos, neg, neu) {
+    if (donutChart) donutChart.destroy();
+    const ctx = document.getElementById('donutChart').getContext('2d');
+    donutChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Positive', 'Negative', 'Neutral'],
+        datasets: [{
+          data: [pos, neg, neu],
+          backgroundColor: ['rgba(16,185,129,0.85)', 'rgba(239,68,68,0.85)', 'rgba(107,114,128,0.7)'],
+          borderColor: ['#10b981', '#ef4444', '#6b7280'],
+          borderWidth: 1.5,
+          hoverOffset: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: '72%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: '#8896b3',
+              font: { family: "'IBM Plex Mono'", size: 10 },
+              padding: 12,
+              usePointStyle: true,
+              pointStyleWidth: 8
+            }
+          },
+          tooltip: {
+            backgroundColor: '#111520',
+            borderColor: '#1a2035',
+            borderWidth: 1,
+            titleFont: { family: "'IBM Plex Mono'" },
+            bodyFont:  { family: "'IBM Plex Mono'" }
+          }
+        }
+      }
+    });
+  }
+
+  // ── Filter Articles ────────────────────────────────────────────────────────
+  function filterArticles(label, btn) {
+    activeFilter = label;
+
+    // Update filter buttons
+    if (btn) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    const filtered = label === 'all' ? allArticles : allArticles.filter(a => a.label === label);
+    renderArticles(filtered);
+  }
+
+  function renderArticles(articles) {
+    const container = document.getElementById('articlesContainer');
+    if (!articles.length) {
+      container.innerHTML = `
+        <div class="state-box">
+          <div class="state-icon">◇</div>
+          <div class="state-title">No articles match this filter</div>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="articles-grid">
+        ${articles.map(a => articleCard(a)).join('')}
+      </div>`;
+  }
+
+  function articleCard(a) {
+    const scoreAbs = Math.abs(a.score);
+    const barWidth = Math.round(scoreAbs * 50); // 0–50px each side
+
+    const dateStr = a.publishedAt
+      ? new Date(a.publishedAt).toLocaleDateString('en-CA', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+      : '';
+
+    const desc = a.description
+      ? `<div class="article-desc">${escHtml(a.description)}</div>`
+      : '';
+
+    return `
+      <div class="article-card">
+        <div class="article-meta">
+          <span class="article-source ${a.source_type}">${escHtml(a.source)}</span>
+          <span class="sentiment-pill ${a.label}">${a.label}</span>
+        </div>
+        <div class="article-title">
+          <a href="${escHtml(a.url)}" target="_blank" rel="noopener">${escHtml(a.title)}</a>
+        </div>
+        ${desc}
+        <div class="article-score-bar">
+          <div class="score-track">
+            <div class="score-center"></div>
+            <div class="score-fill ${a.label}" style="width:${barWidth}%"></div>
+          </div>
+          <span class="score-num">${a.score >= 0 ? '+' : ''}${a.score.toFixed(3)}</span>
+        </div>
+        <div class="article-date">${dateStr}</div>
+      </div>`;
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function setLoading(loading) {
+    const btn = document.getElementById('analyzeBtn');
+    const txt = document.getElementById('btnText');
+    btn.disabled = loading;
+    txt.innerHTML = loading ? '<span class="spinner"></span>' : 'ANALYZE';
+    if (loading) {
+      document.getElementById('articlesContainer').innerHTML = `
+        <div class="state-box">
+          <div class="state-icon"><span class="spinner"></span></div>
+          <div class="state-title" style="margin-top:16px">Fetching &amp; analyzing articles...</div>
+          <div class="state-sub">Querying news and Reddit, running sentiment scoring</div>
+        </div>`;
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('articlesContainer').innerHTML = `
+      <div class="state-box">
+        <div class="state-icon" style="color:var(--red)">⚠</div>
+        <div class="state-title">Analysis failed</div>
+        <div class="state-sub">${escHtml(msg)}</div>
+      </div>`;
+  }
+</script>
+
+</body>
+</html>
