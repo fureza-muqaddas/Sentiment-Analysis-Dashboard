@@ -35,8 +35,6 @@ except Exception as e:
     except Exception as e2:
         print(f"VADER also unavailable: {e2}")
 
-NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
-NEWS_API_URL = "https://newsapi.org/v2/everything"
 REDDIT_SEARCH_URL = "https://www.reddit.com/search.json"
 
 
@@ -75,38 +73,63 @@ def get_sentiment(text: str) -> Tuple[float, str]:
 
 # ─── Data Fetching ────────────────────────────────────────────────────────────
 def fetch_news(company: str, days: int = 7) -> list[dict]:
-    if not NEWS_API_KEY:
-        return []
+    """Fetch news via free RSS feeds (Yahoo Finance + Google News) — no API key needed."""
+    import xml.etree.ElementTree as ET
+    from email.utils import parsedate_to_datetime
 
-    from_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-    params = {
-        "q": f'"{company}"',
-        "from": from_date,
-        "sortBy": "publishedAt",
-        "language": "en",
-        "pageSize": 100,
-        "apiKey": NEWS_API_KEY,
-    }
-    try:
-        resp = requests.get(NEWS_API_URL, params=params, timeout=10)
-        resp.raise_for_status()
-        raw = resp.json().get("articles", [])
-        articles = []
-        for a in raw:
-            if not a.get("title"):
+    feeds = [
+        f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={requests.utils.quote(company)}&region=US&lang=en-US",
+        f"https://news.google.com/rss/search?q={requests.utils.quote(company)}+stock&hl=en-US&gl=US&ceid=US:en",
+        f"https://news.google.com/rss/search?q={requests.utils.quote(company)}+finance&hl=en-US&gl=US&ceid=US:en",
+    ]
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    articles = []
+    seen = set()
+
+    for feed_url in feeds:
+        try:
+            resp = requests.get(feed_url, timeout=10, headers={"User-Agent": "FinSentinel/1.0"})
+            resp.raise_for_status()
+            root = ET.fromstring(resp.content)
+            channel = root.find("channel")
+            if channel is None:
                 continue
-            articles.append({
-                "title": a.get("title", ""),
-                "description": a.get("description") or "",
-                "url": a.get("url", "#"),
-                "source": a.get("source", {}).get("name", "NewsAPI"),
-                "publishedAt": a.get("publishedAt", ""),
-                "source_type": "news",
-            })
-        return articles
-    except Exception as e:
-        print(f"NewsAPI error: {e}")
-        return []
+            source_name = (channel.findtext("title") or "News").split("-")[0].strip()
+
+            for item in channel.findall("item"):
+                title = item.findtext("title") or ""
+                link  = item.findtext("link") or "#"
+                desc  = item.findtext("description") or ""
+                pub   = item.findtext("pubDate") or ""
+
+                if not title or title in seen:
+                    continue
+
+                # Parse date
+                pub_dt = None
+                try:
+                    pub_dt = parsedate_to_datetime(pub).replace(tzinfo=None)
+                except Exception:
+                    pass
+
+                if pub_dt and pub_dt < cutoff:
+                    continue
+
+                seen.add(title)
+                articles.append({
+                    "title": title,
+                    "description": desc[:300],
+                    "url": link,
+                    "source": source_name,
+                    "publishedAt": pub_dt.strftime("%Y-%m-%dT%H:%M:%SZ") if pub_dt else "",
+                    "source_type": "news",
+                })
+        except Exception as e:
+            print(f"RSS feed error ({feed_url[:50]}...): {e}")
+            continue
+
+    return articles
 
 
 FINANCIAL_SUBREDDITS = (
